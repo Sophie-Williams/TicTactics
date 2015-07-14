@@ -99,7 +99,7 @@ void IterativeDepthSearcher<G>::waitState(SearchState state)
 template<typename G>
 IterativeWorker<G>::IterativeWorker(board b)
 	: m_board(std::move(b)), m_wait(new std::mutex{}), m_bestMoves(),
-	  m_worker(doWork, std::ref(*this), 1), interrupt(false)
+	  m_worker(doWork, this, 1), interrupt(false)
 {
 	m_wait->lock();
 }
