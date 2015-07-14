@@ -215,7 +215,7 @@ auto IterativeWorker<G>::alpha_beta(board& board, Depth depth, Alpha alpha,
 		return G::rateBoard(board);
 	}
 	{
-		std::lock_guard<std::mutex> _g{env.fence};
+		// std::lock_guard<std::mutex> _g{env.fence}; // TODO
 		if(env.interrupt)
 			throw typename IterativeWorker::interrupt{};
 	}
@@ -272,7 +272,7 @@ auto IterativeWorker<G>::beta_alpha(board& board, Depth depth, Alpha alpha,
 		return G::rateBoard(board);
 	}
 	{
-		std::lock_guard<std::mutex> _g{env.fence};
+		// std::lock_guard<std::mutex> _g{env.fence}; //TODO
 		if(env.interrupt)
 			throw typename IterativeWorker::interrupt{};
 	}
