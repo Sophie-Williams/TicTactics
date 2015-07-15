@@ -132,10 +132,12 @@ public:
 
 	move bestMove() const;
 	inline void resume() {
+		m_pause = false;
 		m_wait->unlock();
 	}
 	inline void pause() {
 		m_wait->lock();
+		m_pause = true;
 	}
 private:
 	class interrupt {};
@@ -149,6 +151,7 @@ private:
 
 	board m_board;
 	std::unique_ptr<std::mutex> m_wait;
+	volatile bool m_pause;
 	MoveHistory m_bestMoves;
 	std::thread m_worker;
 	volatile bool interrupt;

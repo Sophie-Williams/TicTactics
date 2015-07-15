@@ -98,8 +98,9 @@ void IterativeDepthSearcher<G>::waitState(SearchState state)
 
 template<typename G>
 IterativeWorker<G>::IterativeWorker(board b)
-	: m_board(std::move(b)), m_wait(new std::mutex{}), m_bestMoves(),
-	  m_worker(&IterativeWorker::doWork, this, 1), interrupt(false)
+	: m_board(std::move(b)), m_wait(new std::mutex{}), m_pause(true),
+	  m_bestMoves(), m_worker(&IterativeWorker::doWork, this, 1),
+	  interrupt(false)
 {
 	m_wait->lock();
 }
@@ -107,8 +108,8 @@ IterativeWorker<G>::IterativeWorker(board b)
 template<typename G>
 IterativeWorker<G>::IterativeWorker(IterativeWorker&& o)
 	: m_board(std::move(o.m_board)), m_wait(std::move(o.m_wait)),
-	  m_bestMoves(std::move(o.m_bestMoves)), m_worker(std::move(o.m_worker)),
-	  interrupt(o.interrupt)
+	  m_pause(o.m_pause), m_bestMoves(std::move(o.m_bestMoves)),
+	  m_worker(std::move(o.m_worker)), interrupt(o.interrupt)
 {
 }
 
@@ -140,13 +141,17 @@ template<typename G>
 void IterativeWorker<G>::doWork(Depth n)
 try {
 	typedef std::chrono::duration<float> seconds_floating;
-	ENVIRONMENT env { *m_wait, interrupt, {} };
+	ENVIRONMENT env { *m_wait, interrupt, m_pause
+#ifdef LOOKUPTABLE
+		,{}
+#endif
+	};
 	do {
 		SEARCHRESULT res = startSearch(m_board, n, env);
-		{
+		if(m_pause)
 			std::lock_guard<std::mutex> _g{ *m_wait };
-			m_bestMoves = std::move(res.moves);
-		}
+		m_bestMoves = std::move(res.moves);
+
 		auto timediff = std::chrono::duration_cast<seconds_floating>(
 				res.stats.end - res.stats.start);
 		std::cout << "Iterative Worker Report:" << std::endl
@@ -188,7 +193,7 @@ auto IterativeWorker<G>::startSearch(board b, Depth maxDepth, ENVIRONMENT& env)
 {
 	SEARCHRESULT result = {};
 	result.stats.maxdepth = maxDepth;
-	result.stats.start = std::chrono::high_resolution_clock::now();
+	result.stats.start = std::chrono::system_clock::now();
 
 	if(maxDepth == 0) {
 		result.stats.end = result.stats.start;
@@ -198,7 +203,7 @@ auto IterativeWorker<G>::startSearch(board b, Depth maxDepth, ENVIRONMENT& env)
 			result.moves, env, result.stats);
 
 	result.perfectScore = best;
-	result.stats.end = std::chrono::high_resolution_clock::now();
+	result.stats.end = std::chrono::system_clock::now();
 	return result;
 }
 
@@ -213,11 +218,10 @@ auto IterativeWorker<G>::alpha_beta(board& board, Depth depth, Alpha alpha,
 		history.clear();
 		return G::rateBoard(board);
 	}
-	{
-		// std::lock_guard<std::mutex> _g{env.fence}; // TODO
-		if(env.interrupt)
-			throw typename IterativeWorker::interrupt{};
-	}
+	if(env.pause)
+		std::lock_guard<std::mutex> _g{ env.fence };
+	if(env.interrupt)
+		throw typename IterativeWorker::interrupt{};
 	MoveHistory& tempMoves = getHistory(depth);
 	score bestRating = -G::infinity; // If we can't make moves, we have lost
 #ifdef LOOKUPTABLE
@@ -308,11 +312,10 @@ auto IterativeWorker<G>::beta_alpha(board& board, Depth depth, Alpha alpha,
 		history.clear();
 		return G::rateBoard(board);
 	}
-	{
-		// std::lock_guard<std::mutex> _g{env.fence}; //TODO
-		if(env.interrupt)
-			throw typename IterativeWorker::interrupt{};
-	}
+	if(env.pause)
+		std::lock_guard<std::mutex> _g{ env.fence };
+	if(env.interrupt)
+		throw typename IterativeWorker::interrupt{};
 	MoveHistory& tempMoves = getHistory(depth);
 	score bestRating = G::infinity; // If we can't make moves, we have lost
 #ifdef LOOKUPTABLE
