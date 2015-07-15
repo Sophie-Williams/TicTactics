@@ -6,6 +6,7 @@
  *      Author: WorldSEnder
  */
 
+#include <sstream>
 #include "GameBoard.hpp"
 #include "RatingTable.h"
 
@@ -83,30 +84,27 @@ MoveIterator GameBoard::possibleMoves() const noexcept
 	{
 		const Board& board = m_boards[toIndex(m_lastTurn)];
 		Board::playerset set = board.getFreeFields();
-		BoardIndex field = 0;
-		for(; set.any(); field++, set >>= 1)
+		for(BoardIndex field = 0; set.any() && field < 9; field++, set >>= 1)
 		{
-			Square fieldS = fromIndex(field);
-			if(history.moves > 0 && // Can't send someone back to his square
-					history.history[history.moves - 1].move.bigboard == fieldS)
-				continue;
 			if(!set.test(0))
+				continue;
+			Square fieldS = fromIndex(field);
+			if(history.history[history.moves - 1].move.bigboard == fieldS)
 				continue;
 			it.moves[it.moveCount++] = {m_lastTurn, fieldS};
 		}
 	}
 	else
 	{
-		for(unsigned char boardidx = 0; boardidx < 9; boardidx++)
+		for(BoardIndex boardidx = 0; boardidx < 9; boardidx++)
 		{
 			const Board& board = m_boards[boardidx];
 			Board::playerset set = board.getFreeFields();
-			BoardIndex field = 0;
-			for(; set.any(); field++, set >>= 1)
+			for(BoardIndex field = 0; set.any() && field < 9; field++, set >>= 1)
 			{
-				Square fieldS = fromIndex(field);
 				if(!set.test(0))
 					continue;
+				Square fieldS = fromIndex(field);
 				if(history.moves > 0 && // Can't send someone back to his square
 						history.history[history.moves - 1].move.bigboard == fieldS)
 					continue;
@@ -127,3 +125,23 @@ MoveIterator GameBoard::end() const noexcept
 	return MoveIterator { };
 }
 
+void GameBoard::startOfGame() noexcept
+{
+	// FIXME: reset to the "start of the game"
+	history.moves = 0;
+	m_lastTurn = Square::SQUARE_NONE;
+}
+std::string GameBoard::repr(Square s) const noexcept
+{
+	if(s == Square::SQUARE_NONE)
+	{
+		std::stringstream fill;
+		fill << *this;
+		return fill.str();
+	}
+	else
+	{
+		const Board& b = m_boards[toIndex(s)];
+		return "Printing single boards not supported";
+	}
+}

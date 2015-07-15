@@ -154,7 +154,6 @@ public:
 	Move operator*() const;
 	MoveIterator& operator++();
 private:
-	// TODO: define members
 	Move moves[SQUARES_NUMBER * SQUARES_NUMBER];
 	unsigned moveCount;
 

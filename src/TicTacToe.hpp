@@ -58,6 +58,3 @@ struct TicTacToe {
 		return b.getHash();
 	}
 };
-
-constexpr TicTacToe::move TicTacToe::illegal_move;
-constexpr TicTacToe::move_iterator TicTacToe::end_of_moves;

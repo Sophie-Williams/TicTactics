@@ -56,6 +56,13 @@ S<G> Builder<G, S>::build()
 }
 
 template<typename G>
+IterativeDepthSearcher<G>&
+IterativeDepthSearcher<G>::operator=(IterativeDepthSearcher&& o)
+{
+	m_worker = std::move(o.m_worker);
+}
+
+template<typename G>
 IterativeDepthSearcher<G>::IterativeDepthSearcher(board b)
 	: m_worker(std::move(b))
 {
@@ -65,42 +72,50 @@ template<typename G>
 auto IterativeDepthSearcher<G>::bestMove() const
 -> move
 {
+	return m_worker.bestMove();
 }
 
 template<typename G>
 void IterativeDepthSearcher<G>::applyMove(const move& move)
 {
-
+	m_worker.applyMove(move);
 }
 
 template<typename G>
 SearchState IterativeDepthSearcher<G>::currentState() const
 {
+	// FIXME: correct results here (not that important)
 	return SearchState::PAUSED;
 }
 
 template<typename G>
 SearchState IterativeDepthSearcher<G>::setState(SearchState state)
 {
-	if(state == SearchState::RUNNING) {
-		this->m_worker.resume();
-		return SearchState::RUNNING;
+	switch (state) {
+		case SearchState::RUNNING:
+			this->m_worker.resume();
+			return SearchState::RUNNING;
+		case SearchState::PAUSED:
+			this->m_worker.pause();
+			return SearchState::PAUSED;
+		case SearchState::STOPPED:
+			this->m_worker.terminate();
+			return SearchState::STOPPED;
 	}
-	this->m_worker.pause();
-	return SearchState::PAUSED;
+	return SearchState::STOPPED;
 }
 
 template<typename G>
 void IterativeDepthSearcher<G>::waitState(SearchState state)
 {
-
+	setState(state);
 }
 
 template<typename G>
 IterativeWorker<G>::IterativeWorker(board b)
 	: m_board(std::move(b)), m_wait(new std::mutex{}), m_pause(true),
 	  m_bestMoves(), m_worker(&IterativeWorker::doWork, this, 1),
-	  interrupt(false)
+	  interrupt_sig(false), terminate_sig(false)
 {
 	m_wait->lock();
 }
@@ -109,15 +124,29 @@ template<typename G>
 IterativeWorker<G>::IterativeWorker(IterativeWorker&& o)
 	: m_board(std::move(o.m_board)), m_wait(std::move(o.m_wait)),
 	  m_pause(o.m_pause), m_bestMoves(std::move(o.m_bestMoves)),
-	  m_worker(std::move(o.m_worker)), interrupt(o.interrupt)
+	  m_worker(std::move(o.m_worker)), interrupt_sig(o.interrupt_sig),
+	  terminate_sig(o.terminate_sig)
 {
+}
+
+template<typename G>
+IterativeWorker<G>&
+IterativeWorker<G>::operator =(IterativeWorker&& o)
+{
+	this->terminate();
+	m_board = std::move(o.m_board);
+	m_wait = std::move(o.m_wait);
+	m_pause = o.m_pause;
+	m_bestMoves = std::move(o.m_bestMoves);
+	m_worker = std::move(o.m_worker);
+	interrupt_sig = o.interrupt_sig;
+	return *this;
 }
 
 template<typename G>
 IterativeWorker<G>::~IterativeWorker()
 {
-	interrupt = true;
-	m_worker.join();
+	terminate();
 }
 
 template<typename G>
@@ -140,49 +169,58 @@ auto IterativeWorker<G>::getHistory(Depth d)
 template<typename G>
 void IterativeWorker<G>::doWork(Depth n)
 try {
-	typedef std::chrono::duration<float> seconds_floating;
-	ENVIRONMENT env { *m_wait, interrupt, m_pause
+	ENVIRONMENT env {
 #ifdef LOOKUPTABLE
-		,{}
+		{}
 #endif
 	};
+	auto start = Clock::now();
 	do {
-		SEARCHRESULT res = startSearch(m_board, n, env);
-		if(m_pause)
-			std::lock_guard<std::mutex> _g{ *m_wait };
-		m_bestMoves = std::move(res.moves);
+		try {
+			SEARCHRESULT res = startSearch(m_board, n, env);
+			if(m_pause)
+				doPause();
+			m_bestMoves = std::move(res.moves);
 
-		auto timediff = std::chrono::duration_cast<seconds_floating>(
-				res.stats.end - res.stats.start);
-		std::cout << "Iterative Worker Report:" << std::endl
-				<< "# Depth: " << res.stats.maxdepth << std::endl
-				<< "# Time: " << timediff.count() << std::endl
-				<< "# Nodes: " << res.stats.encountered_nodes << std::endl
-				<< "# N/t: " << res.stats.encountered_nodes
-						/ timediff.count() << std::endl
-				<< "# Pruned: " << res.stats.times_pruned << std::endl
+			auto timediff = std::chrono::duration_cast<seconds_floating>(
+					res.stats.end - res.stats.start);
+			auto timediffSum = std::chrono::duration_cast<seconds_floating>(
+					res.stats.end - start) - pause_time;
+			std::clog << ":Iterative Worker Report:" << std::endl
+					<< ":# Depth: " << res.stats.maxdepth << std::endl
+					<< ":# Time (this run): " << timediff.count() << std::endl
+					<< ":# Time (total): " << timediffSum.count() << std::endl
+					<< ":# Nodes: " << res.stats.encountered_nodes << std::endl
+					<< ":# N/t: " << res.stats.encountered_nodes
+							/ timediff.count() << std::endl
+					<< ":# Pruned: " << res.stats.times_pruned << std::endl
 #ifdef LOOKUPTABLE
-				<< "# Lookup-Hits: " << env.table.getHits() << std::endl
-				<< "# Lookup-Used: " << env.table.getUsed() << std::endl
+					<< ":# Lookup-Hits (this run): " << env.table.getHits() << std::endl
+					<< ":# Lookup-Used: " << env.table.getUsed() << std::endl
 #endif
-				<< "# Sequence: ";
-		std::ostream_iterator<move> cbound(std::cout, " ");
-		std::copy(m_bestMoves.rbegin(), m_bestMoves.rend(), cbound);
-		if(!(res.perfectScore < G::infinity)) {
-			std::cout << "\nWIN!!!!" << std::endl;
-			break;
-		}
-		if(!(res.perfectScore > -G::infinity)) {
-			std::cout << "\nLOSS!!!!" << std::endl;
-			break;
-		}
-		std::cout << std::endl;
+					<< ":# Rating: " << res.perfectScore << std::endl
+					<< ":# Sequence: ";
+			std::ostream_iterator<move> cbound(std::clog, " ");
+			std::copy(m_bestMoves.rbegin(), m_bestMoves.rend(), cbound);
+			if(!(res.perfectScore < G::infinity)) {
+				std::clog << "\n:WIN!!!!" << std::endl;
+				break;
+			}
+			if(!(res.perfectScore > -G::infinity)) {
+				std::clog << "\n:LOSS!!!!" << std::endl;
+				break;
+			}
+			std::clog << std::endl;
 #ifdef LOOKUPTABLE
-		env.table.resetHits();
+			env.table.resetHits();
 #endif
+		} catch (interrupt& i) {
+			std::clog << ":interrupted, repeating run" << std::endl;
+			n--;
+		}
 	} while(n++ < 40);
-} catch (typename IterativeWorker::interrupt& i) {
-	std::cout << "interrupted" << std::endl;
+} catch (typename IterativeWorker::terminate& i) {
+	std::clog << ":terminated" << std::endl;
 	return; // No-op
 }
 
@@ -191,7 +229,15 @@ auto IterativeWorker<G>::bestMove() const
 -> move
 {
 	std::lock_guard<std::mutex> _g{ m_wait };
-	return m_bestMoves.back();
+	if(m_bestMoves.size() > 0)
+		return m_bestMoves.back();
+	return G::illegal_move;
+}
+
+template<typename G>
+void IterativeWorker<G>::applyMove(const move& mv)
+{
+	// TODO: logic here
 }
 
 template<typename G>
@@ -200,7 +246,7 @@ auto IterativeWorker<G>::startSearch(board b, Depth maxDepth, ENVIRONMENT& env)
 {
 	SEARCHRESULT result = {};
 	result.stats.maxdepth = maxDepth;
-	result.stats.start = std::chrono::system_clock::now();
+	result.stats.start = Clock::now();
 
 	if(maxDepth == 0) {
 		result.stats.end = result.stats.start;
@@ -210,7 +256,7 @@ auto IterativeWorker<G>::startSearch(board b, Depth maxDepth, ENVIRONMENT& env)
 			result.moves, env, result.stats);
 
 	result.perfectScore = best;
-	result.stats.end = std::chrono::system_clock::now();
+	result.stats.end = Clock::now();
 	return result;
 }
 
@@ -225,14 +271,16 @@ auto IterativeWorker<G>::alpha_beta(board& board, Depth depth, Alpha alpha,
 		history.clear();
 		return G::rateBoard(board);
 	}
-	if(env.pause)
-		std::lock_guard<std::mutex> _g{ env.fence };
-	if(env.interrupt)
+	if(terminate_sig)
+		throw typename IterativeWorker::terminate{};
+	if(interrupt_sig)
 		throw typename IterativeWorker::interrupt{};
+	if(m_pause)
+		doPause();
 	MoveHistory& tempMoves = getHistory(depth);
 	score bestRating = -G::infinity; // If we can't make moves, we have lost
 #ifdef LOOKUPTABLE
-	move best, overallbest;
+	move best, overallbest = G::illegal_move;
 	hash boardHash = G::hash(board);
 	bool initialized = env.table.load(boardHash, best);
 	if(initialized)
@@ -320,7 +368,8 @@ auto IterativeWorker<G>::alpha_beta(board& board, Depth depth, Alpha alpha,
 		}
 	}
 #ifdef LOOKUPTABLE
-	env.table.store(boardHash, overallbest);
+	if(!(overallbest == G::illegal_move))
+		env.table.store(boardHash, overallbest);
 #endif
 	return bestRating;
 }
@@ -336,14 +385,16 @@ auto IterativeWorker<G>::beta_alpha(board& board, Depth depth, Alpha alpha,
 		history.clear();
 		return G::rateBoard(board);
 	}
-	if(env.pause)
-		std::lock_guard<std::mutex> _g{ env.fence };
-	if(env.interrupt)
+	if(terminate_sig)
+		throw typename IterativeWorker::terminate{};
+	if(interrupt_sig)
 		throw typename IterativeWorker::interrupt{};
+	if(m_pause)
+		doPause();
 	MoveHistory& tempMoves = getHistory(depth);
 	score bestRating = G::infinity; // If we can't make moves, we have lost
 #ifdef LOOKUPTABLE
-	move best, overallbest;
+	move best, overallbest = G::illegal_move;
 	hash boardHash = G::hash(board);
 	bool initialized = env.table.load(boardHash, best);
 	if(initialized)
@@ -434,7 +485,8 @@ auto IterativeWorker<G>::beta_alpha(board& board, Depth depth, Alpha alpha,
 		}
 	}
 #ifdef LOOKUPTABLE
-	env.table.store(boardHash, overallbest);
+	if(!(overallbest == G::illegal_move))
+		env.table.store(boardHash, overallbest);
 #endif
 	return bestRating;
 }

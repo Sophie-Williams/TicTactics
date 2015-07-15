@@ -34,14 +34,12 @@ struct SEARCHRESULTS {
 
 template<typename hash, typename move>
 struct ENVIRONMENT {
-	std::mutex& fence; // For pausing
-	volatile bool& interrupt; // For canceling
-	volatile bool& pause; // For pausing, too
+
 #ifdef LOOKUPTABLE
 	TranspositionTable<hash, move> table;
 #endif
 };
 
 enum class SearchState {
-	RUNNING, PAUSED
+	RUNNING, PAUSED, STOPPED
 };

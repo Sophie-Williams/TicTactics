@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <string>
 #include "tttdefs.hpp"
 #include "Board.hpp"
 
@@ -40,6 +41,14 @@ public:
 	MoveIterator end() const noexcept;
 
 	MoveIterator possibleMoves() const noexcept;
+	/**
+	 * Sets the inner state to the start of a game after both
+	 * players have placed their initial turns.
+	 *
+	 * Fields occupied by both players will be wiped.
+	 */
+	void startOfGame() noexcept;
+	std::string repr(Square s = Square::SQUARE_NONE) const noexcept;
 
 	inline BoardHash getHash() const noexcept
 	{

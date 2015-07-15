@@ -125,12 +125,18 @@ class IterativeWorker
 {
 	SEARCHER_IMPORT_NAMES(Game)
 public:
+	IterativeWorker() = default;
 	IterativeWorker(board b);
 	IterativeWorker(const IterativeWorker&) = delete;
 	IterativeWorker(IterativeWorker&&);
+
+	IterativeWorker& operator=(const IterativeWorker&) = delete;
+	IterativeWorker& operator=(IterativeWorker&&);
 	~IterativeWorker();
 
 	move bestMove() const;
+	void applyMove(const move&);
+
 	inline void resume() {
 		m_pause = false;
 		m_wait->unlock();
@@ -139,8 +145,17 @@ public:
 		m_wait->lock();
 		m_pause = true;
 	}
+	inline void terminate() {
+		if(!m_worker.joinable())
+			return;
+		if(m_pause)
+			resume();
+		terminate_sig = true;
+		m_worker.join();
+	}
 private:
 	class interrupt {};
+	class terminate {};
 
 	typedef unsigned Depth;
 	typedef score Alpha;
@@ -148,25 +163,39 @@ private:
 	typedef SEARCHRESULTS<move, score> SEARCHRESULT;
 	typedef ENVIRONMENT<hash, move> ENVIRONMENT;
 	typedef move_history<move> MoveHistory;
+	typedef std::chrono::duration<float> seconds_floating;
+	typedef std::chrono::system_clock Clock;
 
 	board m_board;
 	std::unique_ptr<std::mutex> m_wait;
 	volatile bool m_pause;
 	MoveHistory m_bestMoves;
 	std::thread m_worker;
-	volatile bool interrupt;
+	volatile bool interrupt_sig;
+	volatile bool terminate_sig;
+	seconds_floating pause_time;
 
 	void doWork(Depth start = 1);
 
-	static std::vector<MoveHistory> makeHistory(); // Initializer
-	static MoveHistory& getHistory(Depth);
+	inline void doPause()
+	{
+		auto start = Clock::now();
+		{
+			std::lock_guard<std::mutex> _g{ *m_wait };
+		}
+		auto end = Clock::now();
+		pause_time += (end - start);
+	}
 
-	static SEARCHRESULT startSearch(board, Depth, ENVIRONMENT& env);
+	std::vector<MoveHistory> makeHistory(); // Initializer
+	MoveHistory& getHistory(Depth);
+
+	SEARCHRESULT startSearch(board, Depth, ENVIRONMENT& env);
 	// Maximizes the score, returned in alpha
-	static score alpha_beta(board&, Depth, Alpha, Beta, MoveHistory&,
+	score alpha_beta(board&, Depth, Alpha, Beta, MoveHistory&,
 			ENVIRONMENT&, SEARCHSTATS&);
 	// Minimizes the score
-	static score beta_alpha(board&, Depth, Alpha, Beta, MoveHistory&,
+	score beta_alpha(board&, Depth, Alpha, Beta, MoveHistory&,
 			ENVIRONMENT&, SEARCHSTATS&);
 };
 
@@ -175,8 +204,13 @@ class IterativeDepthSearcher
 {
 	SEARCHER_IMPORT_NAMES(Game)
 public:
-	IterativeDepthSearcher(const IterativeDepthSearcher&from) = delete;
+	IterativeDepthSearcher() = default;
+	IterativeDepthSearcher(const IterativeDepthSearcher&) = delete;
 	IterativeDepthSearcher(IterativeDepthSearcher&&) = default;
+
+	IterativeDepthSearcher& operator=(const IterativeDepthSearcher&) = delete;
+	IterativeDepthSearcher& operator=(IterativeDepthSearcher&&);
+
 	move bestMove() const;
 	void applyMove(const move&);
 	SearchState currentState() const;
