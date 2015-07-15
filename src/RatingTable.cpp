@@ -1,5 +1,5 @@
 
-int ratingTable [] = {0
+int ratingTable [512*512] = {0
 ,-3
 ,-2
 ,-20

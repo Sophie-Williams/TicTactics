@@ -32,12 +32,12 @@ struct SEARCHRESULTS {
 	SEARCHSTATS stats;
 };
 
-template<typename hash, typename score, typename move>
+template<typename hash, typename move>
 struct ENVIRONMENT {
 	std::mutex& fence; // For pausing
 	volatile bool& interrupt; // For canceling
 
-	TranspositionTable<hash, score, move> table;
+	TranspositionTable<hash, move> table;
 };
 
 enum class SearchState {

@@ -10,12 +10,14 @@
 #include <inttypes.h>
 #include <memory>
 
-template<typename K, typename V, typename M>
+template<typename K, typename M>
 struct TranspositionNode
 {
+	inline TranspositionNode(const K& k, const M& m)
+		: data({k, m}), initialized(false)
+	{}
 	struct {
 		K exact_key;
-		V score; // score of that
 		M move; // best move
 	} data;
 	bool initialized; // a member we can write on in unitialized context
@@ -46,22 +48,21 @@ protected:
 	Hasher hash_fn;
 };
 
-template<typename hashable, typename score,
+template<typename hashable,
 		typename move,
 		typename H=std::hash<hashable>,
 		typename A=std::allocator<hashable>>
 class TranspositionTable :
-		alloc_base<typename A::template rebind<TranspositionNode<hashable, score, move>>::other>,
+		alloc_base<typename A::template rebind<TranspositionNode<hashable, move>>::other>,
 		hasher_base<H>
 {
 	typedef H Hasher;
-	typedef TranspositionNode<hashable, score, move> Node;
+	typedef TranspositionNode<hashable, move> Node;
 	typedef typename A::template rebind<Node>::other Allocator;
 	typedef alloc_base<Allocator> Alloc_B;
 	typedef hasher_base<H> Hasher_B;
 public:
 	typedef hashable key;
-	typedef score value;
 	typedef move action;
 
 	TranspositionTable(MemSize = 0x8000000, const Hasher& = Hasher{},
@@ -73,14 +74,14 @@ public:
 	 * If there is already an entry with that key (or the same
 	 * hash) it is overridden.
 	 */
-	void store(const key&, const value&, const action&);
+	void store(const key&, const action&);
 	/**
 	 * Loads a value from the hashtable, if available.
 	 * If not available, value is left unchanged.
 	 *
 	 * @return true if key was found.
 	 */
-	bool load(const key&, value&, action&);
+	bool load(const key&, action&);
 	/**
 	 * Clears the hashtable.
 	 */

@@ -132,7 +132,6 @@ template<typename G>
 auto IterativeWorker<G>::getHistory(Depth d)
 -> MoveHistory&
 {
-
 	static std::vector<MoveHistory> allHistories = makeHistory();
 	return allHistories[d];
 }
@@ -221,10 +220,38 @@ auto IterativeWorker<G>::alpha_beta(board& board, Depth depth, Alpha alpha,
 	}
 	MoveHistory& tempMoves = getHistory(depth);
 	score bestRating = -G::infinity; // If we can't make moves, we have lost
+#ifdef LOOKUPTABLE
+	move best, overallbest;
+	bool initialized = env.table.load(G::hash(board), best);
+	if(initialized)
+	{
+		overallbest = best;
+		_detail::temporary_move<G> apply(board, best);
+		bestRating = beta_alpha(board, depth - 1, alpha, beta, tempMoves, env, stats);
+		if(!(bestRating < G::infinity))
+		{
+			std::swap(history, tempMoves);
+			history.push_back(best);
+			return G::infinity;
+		}
+		if(bestRating > alpha)
+		{
+			alpha = bestRating;
+		}
+		if(!(alpha < beta)) { // Prune!
+			stats.times_pruned++;
+			return bestRating; // Maximum weight, so nobody takes this
+		}
+	}
+#endif
 	for(move_iterator it = G::getMoves(board); it != G::end_of_moves;
 			++it)
 	{
 		move m = *it;
+#ifdef LOOKUPTABLE
+		if(initialized && m == best)
+			continue;
+#endif
 		_detail::temporary_move<G> apply(board, m);
 		score currentRating;
 		switch(apply.getWinner())
@@ -232,6 +259,9 @@ auto IterativeWorker<G>::alpha_beta(board& board, Depth depth, Alpha alpha,
 		case G::player1:
 			history.clear();
 			history.push_back(m);
+#ifdef LOOKUPTABLE
+			env.table.store(G::hash(board), m);
+#endif
 			return G::infinity;
 		case G::player2:
 			continue;
@@ -246,6 +276,9 @@ auto IterativeWorker<G>::alpha_beta(board& board, Depth depth, Alpha alpha,
 			bestRating = currentRating;
 			std::swap(history, tempMoves);
 			history.push_back(m);
+#ifdef LOOKUPTABLE
+			overallbest = m;
+#endif
 		}
 		if(bestRating > alpha) {
 			alpha = bestRating; // Maximize
@@ -254,9 +287,13 @@ auto IterativeWorker<G>::alpha_beta(board& board, Depth depth, Alpha alpha,
 			stats.times_pruned++;
 			return bestRating; // Maximum weight, so nobody takes this
 		}
-		if(!(bestRating < G::infinity))
-			return bestRating;
+		if(!(currentRating < G::infinity)) {
+			break;
+		}
 	}
+#ifdef LOOKUPTABLE
+	env.table.store(G::hash(board), overallbest);
+#endif
 	return bestRating;
 }
 // Minimizes the score
@@ -278,10 +315,38 @@ auto IterativeWorker<G>::beta_alpha(board& board, Depth depth, Alpha alpha,
 	}
 	MoveHistory& tempMoves = getHistory(depth);
 	score bestRating = G::infinity; // If we can't make moves, we have lost
+#ifdef LOOKUPTABLE
+	move best, overallbest;
+	bool initialized = env.table.load(G::hash(board), best);
+	if(initialized)
+	{
+		overallbest = best;
+		_detail::temporary_move<G> apply(board, best);
+		bestRating = alpha_beta(board, depth - 1, alpha, beta, tempMoves, env, stats);
+		if(!(bestRating > -G::infinity))
+		{
+			std::swap(history, tempMoves);
+			history.push_back(best);
+			return G::infinity;
+		}
+		if(bestRating < beta)
+		{
+			alpha = bestRating;
+		}
+		if(!(alpha < beta)) { // Prune!
+			stats.times_pruned++;
+			return bestRating; // Maximum weight, so nobody takes this
+		}
+	}
+#endif
 	for(move_iterator it = G::getMoves(board); it != G::end_of_moves;
 			++it)
 	{
 		move m = *it;
+#ifdef LOOKUPTABLE
+		if(initialized && m == best)
+			continue;
+#endif
 		_detail::temporary_move<G> apply(board, m);
 		score currentRating;
 		switch(apply.getWinner())
@@ -291,6 +356,9 @@ auto IterativeWorker<G>::beta_alpha(board& board, Depth depth, Alpha alpha,
 		case G::player2:
 			history.clear();
 			history.push_back(m);
+#ifdef LOOKUPTABLE
+			env.table.store(G::hash(board), m);
+#endif
 			return -G::infinity; // Found a win
 		case G::both:
 			currentRating = 0;
@@ -299,10 +367,14 @@ auto IterativeWorker<G>::beta_alpha(board& board, Depth depth, Alpha alpha,
 			currentRating = alpha_beta(board, depth - 1, alpha, beta,
 					tempMoves, env, stats);
 		}
+
 		if(currentRating < bestRating) {
 			bestRating = currentRating;
 			std::swap(history, tempMoves);
 			history.push_back(m);
+#ifdef LOOKUPTABLE
+			overallbest = m;
+#endif
 		}
 		if(bestRating < beta) {
 			beta = bestRating; // Minimize
@@ -311,9 +383,13 @@ auto IterativeWorker<G>::beta_alpha(board& board, Depth depth, Alpha alpha,
 			stats.times_pruned++;
 			return bestRating; // Maximum weight, so nobody takes this
 		}
-		if(!(bestRating > -G::infinity))
-			return bestRating;
+		if(!(currentRating > -G::infinity)) {
+			break;
+		}
 	}
+#ifdef LOOKUPTABLE
+	env.table.store(G::hash(board), overallbest);
+#endif
 	return bestRating;
 }
 

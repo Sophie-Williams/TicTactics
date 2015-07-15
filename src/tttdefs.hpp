@@ -17,7 +17,7 @@ typedef signed Score;
 typedef unsigned char BoardIndex;
 typedef std::bitset<18*10> BoardHash;
 
-enum class Color : unsigned char {
+enum class Color {
 	NONE = 0,
 	CROSS,
 	CIRCLE,
@@ -101,8 +101,21 @@ constexpr BoardIndex SQUARES_NUMBER = 9;
 #endif
 
 struct Move {
+#ifdef USEBITFIELDS
+	inline constexpr Move()
+		: bigboard(Square::SQUARE_NONE), smallboard(Square::SQUARE_NONE)
+	{}
+	inline constexpr Move(Square s, Square s1)
+		: bigboard(s), smallboard(s1)
+	{}
+#endif
 	Square bigboard BITFIELD(4);
 	Square smallboard BITFIELD(4);
+
+	inline constexpr bool operator==(const Move& o)
+	{
+		return bigboard == o.bigboard && smallboard == o.smallboard;
+	}
 
 	template< typename charT, typename Traits >
 	friend

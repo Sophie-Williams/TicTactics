@@ -144,7 +144,7 @@ private:
 	typedef score Alpha;
 	typedef score Beta;
 	typedef SEARCHRESULTS<move, score> SEARCHRESULT;
-	typedef ENVIRONMENT<hash, score, move> ENVIRONMENT;
+	typedef ENVIRONMENT<hash, move> ENVIRONMENT;
 	typedef move_history<move> MoveHistory;
 
 	board m_board;
