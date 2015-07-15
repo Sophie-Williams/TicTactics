@@ -41,6 +41,7 @@ private:
 	ostream& os;
 
 	Searcher search;
+	SearchState state;
 
 	void fail(std::string = "BIG FAIL!");
 	std::string getline();

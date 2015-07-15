@@ -51,7 +51,7 @@ const std::string LOST_MESSAGE = " lost himself the game"; // Can't stringify
 }
 
 EngineInstance::EngineInstance(istream& input, ostream& output)
-	: board(), is(input), os(output), search()
+	: board(), is(input), os(output), search(), state(SearchState::PAUSED)
 {}
 
 EngineInstance::~EngineInstance()
@@ -73,7 +73,7 @@ std::string EngineInstance::getline()
 
 bool EngineInstance::isMove(std::string& buffer)
 {
-	if(buffer.size() != 4 || buffer[0] != 'B' || buffer[2] != 'F'
+	if(buffer.size() < 4 || buffer[0] != 'B' || buffer[2] != 'F'
 			|| !isdigit(buffer[1]) || !isdigit(buffer[3])
 			|| buffer[1] == '0' || buffer[3] == '0')
 		return false;
@@ -122,6 +122,7 @@ void EngineInstance::run()
 	}
 	board.setPlayer(Color::CROSS);
 	board.startOfGame();
+	search = Builder<TicTacToe, IterativeDepthSearcher>{}.setBoard(board).build();
 	Color winner;
 	while((buffer = getline(), true))
 	{
@@ -134,15 +135,22 @@ void EngineInstance::run()
 		}
 		else if(buffer.find(OP_GO_INC) == 0)
 		{
-			// TODO: support Go
+			if(state == SearchState::PAUSED)
+				state = search.setState(SearchState::RUNNING);
+			if(state == SearchState::STOPPED)
+				fail("Already stopped, can't restart");
 		}
 		else if(buffer == OP_PAUSE)
 		{
-			// TODO: support pausing
+			if(state == SearchState::RUNNING)
+				state = search.setState(SearchState::PAUSED);
+			if(state == SearchState::STOPPED)
+				fail("Already stopped, can't pause");
 		}
 		else if(buffer == OP_STOP)
 		{
-			// TODO: support stop
+			if(state != SearchState::STOPPED)
+				state = search.setState(SearchState::STOPPED);
 		}
 		else if(buffer == OP_PRINT_FULL)
 		{
@@ -156,7 +164,6 @@ void EngineInstance::run()
 		else
 		{
 			fail(INVALID_IN);
-			break;
 		}
 	}
 	switch(winner)
