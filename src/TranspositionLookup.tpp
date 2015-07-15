@@ -9,6 +9,7 @@
 #pragma once
 
 #include <utility>
+#include <iostream>
 #include "TranspositionLookup.hpp"
 
 
@@ -18,8 +19,11 @@ TranspositionTable<h, m, H, A>::TranspositionTable(
 		const Allocator& alloc_fn)
 	: alloc_base<Allocator>(alloc_fn), hasher_base<H>(hash_fn),
 	  memory(Alloc_B::toLowerPot2(memSize / sizeof(Node)) -1 ),
-	  nodes(this->alloc.allocate(memory + 1))
+	  nodes(this->alloc.allocate(memory + 1)),
+	  initialized(0), hits(0)
 {
+	std::cout << "Using memSize: " << memSize << " with " << memory << " data" << std::endl;
+	std::cout << sizeof(Node) << std::endl;
 }
 
 template<typename h,typename m, typename H, typename A>
@@ -37,6 +41,7 @@ void TranspositionTable<h, m, H, A>::store(const key& k, const action& a)
 	if(!node->initialized)
 	{
 		this->alloc.construct(node, k, a);
+		initialized++;
 	}
 	else
 	{
@@ -56,6 +61,7 @@ bool TranspositionTable<h, m, H, A>::load(const key& k, action& a)
 	}
 	if(!(node->data.exact_key == k))
 		return false;
+	hits++;
 	a = node->data.move;
 	return true;
 }
@@ -63,6 +69,8 @@ bool TranspositionTable<h, m, H, A>::load(const key& k, action& a)
 template<typename h,typename m, typename H, typename A>
 void TranspositionTable<h, m, H, A>::clear()
 {
+	initialized = 0;
+	hits = 0;
 	for(Node *node = nodes; node < (nodes + memory + 1); node++)
 	{
 		if(node->initialized)

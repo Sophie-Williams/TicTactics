@@ -47,7 +47,7 @@ public:
 		for(const Board& b : m_boards)
 		{
 			h |= b.getHash();
-			h << 18;
+			h <<= 18;
 		}
 		h |= m_bigboard.getHash();
 		return h;

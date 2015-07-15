@@ -14,7 +14,7 @@ template<typename K, typename M>
 struct TranspositionNode
 {
 	inline TranspositionNode(const K& k, const M& m)
-		: data({k, m}), initialized(false)
+		: data({k, m}), initialized(true)
 	{}
 	struct {
 		K exact_key;
@@ -86,9 +86,23 @@ public:
 	 * Clears the hashtable.
 	 */
 	void clear();
+	inline void resetHits()
+	{
+		hits = 0;
+	}
+	inline MemSize getHits()
+	{
+		return hits;
+	}
+	inline MemSize getUsed()
+	{
+		return initialized;
+	}
 private:
 	MemSize memory;
 	Node* nodes;
+	MemSize initialized;
+	MemSize hits;
 };
 
 #include "TranspositionLookup.tpp"
