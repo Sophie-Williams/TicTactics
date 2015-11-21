@@ -175,6 +175,8 @@ EngineInstance::run ()
 	{
 	  if (state != SearchState::STOPPED)
 	    state = search->setState (SearchState::STOPPED);
+	  if (state == SearchState::STOPPED)
+	    break;
 	}
       else if (isInputString (buffer, OP_PRINT_FULL))
 	{
