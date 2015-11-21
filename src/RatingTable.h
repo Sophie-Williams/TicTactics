@@ -8,5 +8,5 @@
 
 #pragma once
 
-extern int ratingTable[512*512];
+extern int ratingTable[512 * 512];
 

@@ -96,16 +96,19 @@
 //	void waitState(SearchState);
 //}
 
-template<typename Game, template<typename> class Searcher>
-class Builder {
-public:
-	typedef typename Game::board board;
-	Builder& setBoard(board);
+template<typename Game, template<typename > class Searcher>
+  class Builder
+  {
+  public:
+    typedef typename Game::board board;
+    Builder&
+    setBoard (board);
 
-	Searcher<Game> build();
-private:
-	board m_board;
-};
+    std::unique_ptr<Searcher<Game>>
+    build ();
+  private:
+    board m_board;
+  };
 
 #define SEARCHER_IMPORT_NAMES(Game)\
 	typedef typename Game::winner winner;\
@@ -121,106 +124,110 @@ private:
  * fast low-depth-calculations with an iterative-depth-approach.
  */
 template<typename Game>
-class IterativeWorker
-{
-	SEARCHER_IMPORT_NAMES(Game)
-public:
-	IterativeWorker() = default;
-	IterativeWorker(board b);
-	IterativeWorker(const IterativeWorker&) = delete;
-	IterativeWorker(IterativeWorker&&);
+  class IterativeWorker
+  {
+    SEARCHER_IMPORT_NAMES(Game)public:
+    IterativeWorker() = default;
+    IterativeWorker(board b);
+    IterativeWorker(const IterativeWorker&) = delete;
+    IterativeWorker(IterativeWorker&&);
 
-	IterativeWorker& operator=(const IterativeWorker&) = delete;
-	IterativeWorker& operator=(IterativeWorker&&);
-	~IterativeWorker();
+    IterativeWorker& operator=(const IterativeWorker&) = delete;
+    IterativeWorker& operator=(IterativeWorker&&);
+    ~IterativeWorker();
 
-	move bestMove() const;
-	void applyMove(const move&);
+    move bestMove() const;
+    void applyMove(const move&);
 
-	inline void resume() {
-		m_pause = false;
-		m_wait->unlock();
-	}
-	inline void pause() {
-		m_wait->lock();
-		m_pause = true;
-	}
-	inline void terminate() {
-		if(!m_worker.joinable())
-			return;
-		if(m_pause)
-			resume();
-		terminate_sig = true;
-		m_worker.join();
-	}
-private:
-	class interrupt {};
-	class terminate {};
+    inline void resume()
+      {
+	m_pause = false;
+	m_wait->unlock();
+      }
+    inline void pause()
+      {
+	m_wait->lock();
+	m_pause = true;
+      }
+    inline void terminate()
+      {
+	if(!m_worker.joinable())
+	return;
+	if(m_pause)
+	resume();
+	terminate_sig = true;
+	m_worker.join();
+      }
+  private:
+    class interrupt
+      {};
+    class terminate
+      {};
 
-	typedef unsigned Depth;
-	typedef score Alpha;
-	typedef score Beta;
-	typedef SEARCHRESULTS<move, score> SEARCHRESULT;
-	typedef ENVIRONMENT<hash, move> ENVIRONMENT;
-	typedef move_history<move> MoveHistory;
-	typedef std::chrono::duration<float> seconds_floating;
-	typedef std::chrono::system_clock Clock;
+    typedef unsigned Depth;
+    typedef score Alpha;
+    typedef score Beta;
+    typedef SEARCHRESULTS<move, score> SEARCHRESULT;
+    typedef ENVIRONMENT<hash, move> ENVIRONMENT;
+    typedef move_history<move> MoveHistory;
+    typedef std::chrono::duration<float> seconds_floating;
+    typedef std::chrono::system_clock Clock;
 
-	board m_board;
-	std::unique_ptr<std::mutex> m_wait;
-	volatile bool m_pause;
-	MoveHistory m_bestMoves;
-	std::thread m_worker;
-	volatile bool interrupt_sig;
-	volatile bool terminate_sig;
-	seconds_floating pause_time;
+    board m_board;
+    std::unique_ptr<std::mutex> m_wait;
+    volatile bool m_pause;
+    MoveHistory m_bestMoves;
+    std::thread m_worker;
+    volatile bool interrupt_sig;
+    volatile bool terminate_sig;
+    seconds_floating pause_time;
 
-	void doWork(Depth start = 1);
+    void doWork(Depth start = 1);
 
-	inline void doPause()
-	{
-		auto start = Clock::now();
-		{
-			std::lock_guard<std::mutex> _g{ *m_wait };
-		}
-		auto end = Clock::now();
-		pause_time += (end - start);
-	}
+    inline void doPause()
+      {
+	auto start = Clock::now();
+	  {
+	    std::lock_guard<std::mutex> _g
+	      { *m_wait};
+	  }
+	auto end = Clock::now();
+	pause_time += (end - start);
+      }
 
-	std::vector<MoveHistory> makeHistory(); // Initializer
-	MoveHistory& getHistory(Depth);
+    std::vector<MoveHistory> makeHistory(); // Initializer
+    MoveHistory& getHistory(Depth);
 
-	SEARCHRESULT startSearch(board, Depth, ENVIRONMENT& env);
-	// Maximizes the score, returned in alpha
-	score alpha_beta(board&, Depth, Alpha, Beta, MoveHistory&,
-			ENVIRONMENT&, SEARCHSTATS&);
-	// Minimizes the score
-	score beta_alpha(board&, Depth, Alpha, Beta, MoveHistory&,
-			ENVIRONMENT&, SEARCHSTATS&);
-};
+    SEARCHRESULT startSearch(board, Depth, ENVIRONMENT& env);
+    // Maximizes the score, returned in alpha
+    score alpha_beta(board&, Depth, Alpha, Beta, MoveHistory&,
+	ENVIRONMENT&, SEARCHSTATS&);
+    // Minimizes the score
+    score beta_alpha(board&, Depth, Alpha, Beta, MoveHistory&,
+	ENVIRONMENT&, SEARCHSTATS&);
+  };
 
 template<typename Game>
-class IterativeDepthSearcher
-{
-	SEARCHER_IMPORT_NAMES(Game)
-public:
-	IterativeDepthSearcher() = default;
-	IterativeDepthSearcher(const IterativeDepthSearcher&) = delete;
-	IterativeDepthSearcher(IterativeDepthSearcher&&) = default;
+  class IterativeDepthSearcher
+  {
+    SEARCHER_IMPORT_NAMES(Game)public:
+    IterativeDepthSearcher() = default;
+    IterativeDepthSearcher(board);
+    IterativeDepthSearcher(const IterativeDepthSearcher&) = delete;
+    IterativeDepthSearcher(IterativeDepthSearcher&&) = default;
 
-	IterativeDepthSearcher& operator=(const IterativeDepthSearcher&) = delete;
-	IterativeDepthSearcher& operator=(IterativeDepthSearcher&&);
+    IterativeDepthSearcher& operator=(const IterativeDepthSearcher&) = delete;
+    IterativeDepthSearcher& operator=(IterativeDepthSearcher&&);
 
-	move bestMove() const;
-	void applyMove(const move&);
-	SearchState currentState() const;
-	SearchState setState(SearchState);
-	void waitState(SearchState);
-private:
-	IterativeDepthSearcher(board);
+    move bestMove() const;
+    void applyMove(const move&);
+    SearchState currentState() const;
+    SearchState setState(SearchState);
+    void waitState(SearchState);
+  private:
 
-	IterativeWorker<Game> m_worker;
-	friend Builder<Game, IterativeDepthSearcher>;
-};
+    IterativeWorker<Game> m_worker;
+    friend Builder<Game, IterativeDepthSearcher>;
+  };
 
 #include "Searcher.tpp"

@@ -10,12 +10,13 @@
 #include <string>
 #include "TicTacIO.hpp"
 
-
-int main()
+int
+main ()
 {
-	EngineInstance instance{std::cin, std::cout};
-	instance.run();
+  EngineInstance instance
+    { std::cin, std::cout };
+  instance.run ();
 
-	return 0;
+  return 0;
 }
 
